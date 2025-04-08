@@ -1,192 +1,148 @@
-(function(){
+
+(function() {
     'use strict';
-    
-    // Перевірка ініціалізації плагіна
-    function init() {
-        // Щоб уникнути повторної ініціалізації
-        if (window.lampa_imdb_plugin_ready) return;
-        window.lampa_imdb_plugin_ready = true;
-        
-        // Додаємо CSS стилі
-        const style = document.createElement('style');
-        style.textContent = `
-            .card__imdb {
-                position: absolute;
-                bottom: 0;
-                left: 0;
-                margin: 0.6em;
-                padding: 0.4em 0.6em;
-                background-color: rgba(0, 0, 0, 0.7);
-                border-radius: 0.3em;
-                font-size: 0.9em;
-                cursor: pointer;
-                z-index: 2;
-                transition: transform 0.1s ease-in-out;
-            }
-            .card__imdb:hover {
-                transform: scale(1.1);
-            }
-            .card__imdb-text {
-                display: flex;
-                align-items: center;
-                color: #fff;
-                font-weight: 600;
-            }
-            .imdb-icon {
-                background-image: url('data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgNTEyIDUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCBmaWxsPSIjZjVjNTE4IiBoZWlnaHQ9IjUxMiIgcng9IjE1JSIgd2lkdGg9IjUxMiIvPjxwYXRoIGQ9Im0xMDQgMzI4aDcydi0xNDRoLTcyem0xNjgtMTQ0djE0NGgtMzZ2LTEwOGgtOHYxMDhoLTM2di0xNDR6bTY0IDBjMTEuNSAwIDIwLjUgMS41IDI2LjggNC4zIDYuMyAyLjggMTAuNyA3LjIgMTMuMyAxMi43IDIuNSA1LjQgMy44IDEyLjcgMy44IDIxLjl2ODIuOWgtMzZ2LTc0LjRjMC05LjMtMS4zLTE1LjQtMy44LTE4LjEtMi41LTIuOC03LjMtNC4yLTE0LjUtNC4yaC0yLjV2OTYuOGgtMzZ2LTE0NGgzNnptODQgMHYxNDRoLTM2di0xNDRoMzZ6bTUwLjUgMGMxMS4yIDAgMjEuMSAyLjYgMjkuNiA3LjcgOC41IDUuMSAxNC45IDE3LjEgMTQuOSAyOS4yIDAgMTItNi40IDI0LTE0LjkgMjkuMi04LjUgNS4xLTE4LjQgNy43LTI5LjYgNy43aC0xMS41djcwLjJoLTM2di0xNDRoMzZ6IiBmaWxsPSIjMDUwNTA1Ii8+PHBhdGggZD0ibTMzNi41IDIxNi45YzQuMiAwIDcuOC0xLjMgMTAuNi0zLjkgMi44LTIuNiA0LjMtNS43IDQuMy05LjMgMC0zLjYtMS40LTYuNy00LjMtOS4zLTIuOC0yLjYtNi40LTMuOS0xMC42LTMuOWgtMTEuNXYyNi40eiIgZmlsbD0iI2Y1YzUxOCIvPjwvc3ZnPg==');
-                background-size: contain;
-                background-repeat: no-repeat;
-                width: 1.2em;
-                height: 1.2em;
-                margin-right: 0.4em;
-            }
-        `;
-        document.head.appendChild(style);
-        
-        // API ключ OMDb
-        const apiKey = 'e0a2c76f';
-        
-        // Створюємо мережевий клас
-        const network = new Lampa.Reguest();
-        
-        // Функція для очищення назви фільму від спеціальних символів
-        function cleanTitle(title) {
-            if (!title) return '';
-            return title.replace(/[^a-zA-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-        }
-        
-        // Функція для додавання рейтингу до картки
-        function addRatingToCard(card) {
-            if (!card || !card.id || !card.element) return;
-            
-            // Перевіряємо, чи рейтинг вже існує
-            if (card.element.find('.card__imdb').length) return;
-            
-            // Дані для пошуку
-            const title = cleanTitle(card.title || card.name);
-            const original_title = card.original_title || card.original_name;
-            const year = parseInt((card.release_date || card.first_air_date || '0000').slice(0, 4));
-            
-            // Формуємо URL запит
-            let url = 'https://www.omdbapi.com/?apikey=' + apiKey;
-            
-            // Пріоритет по IMDB ID, якщо доступний
-            if (card.imdb_id) {
-                url += '&i=' + encodeURIComponent(card.imdb_id);
-            } else {
-                // Якщо немає IMDB ID, шукаємо за назвою і роком
-                url += '&t=' + encodeURIComponent(title) + '&y=' + year;
-            }
-            
-            // Робимо запит до API
-            network.clear();
-            network.timeout(15000);
-            network.silent(url, function(json) {
+
+    function addRatings(card) {
+        var network = new Lampa.Reguest();
+        var clean_title = card.title || card.name;
+        var search_date = card.release_date || card.first_air_date || '0000';
+        var search_year = parseInt((search_date + '').slice(0, 4));
+
+        var params = {
+            url: 'https://www.omdbapi.com/',
+            api_key: 'YOUR_OMDB_API_KEY', // Replace with your API key
+            cache_time: 60 * 60 * 24 * 1000 // 24 hours cache
+        };
+
+        if ($('.card-rating', card.element).length) return;
+
+        var cache = _getCache(card.id);
+        if (cache) {
+            _showRating(cache);
+        } else {
+            network.silent(params.url + '?t=' + encodeURIComponent(clean_title) + '&y=' + search_year + '&apikey=' + params.api_key, function(json) {
                 if (json && json.Response === 'True' && json.imdbRating && json.imdbRating !== 'N/A') {
-                    // Створюємо елемент з рейтингом
-                    const rating_div = document.createElement('div');
-                    rating_div.className = 'card__imdb';
-                    rating_div.innerHTML = '<div class="card__imdb-text"><div class="imdb-icon"></div>' + json.imdbRating + '</div>';
-                    
-                    // Додаємо клік для переходу на сторінку IMDB, якщо є imdbID
-                    if (json.imdbID) {
-                        rating_div.addEventListener('click', function(e) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            
-                            const url = 'https://www.imdb.com/title/' + json.imdbID;
-                            
-                            if (Lampa.Platform.is('android')) {
-                                window.location.href = url;
-                            } else {
-                                Lampa.Utils.openLink(url);
-                            }
-                        });
-                    }
-                    
-                    // Додаємо до елемента картки
-                    $('.card__view', card.element).append(rating_div);
+                    var data = {
+                        imdb: json.imdbRating,
+                        tmdb: card.vote_average ? parseFloat(card.vote_average).toFixed(1) : '',
+                        timestamp: new Date().getTime()
+                    };
+                    _setCache(card.id, data);
+                    _showRating(data);
                 }
-            });
+            }, function() {});
         }
-        
-        // Функція для обробки карток з активністю "full"
-        function processFullActivity(e) {
-            if (e.type === 'complite') {
-                const activity = e.object.activity;
-                if (!activity) return;
-                
-                const render = activity.render();
-                if (!render || !render.render) return;
-                
-                const items = render.render.find('.items-line > div');
-                
-                if (items.length) {
-                    items.each(function() {
-                        const card = $(this)[0].card;
-                        if (card && card.copy) {
-                            const cardData = card.copy();
-                            if (cardData) {
-                                addRatingToCard(cardData);
-                            }
-                        }
-                    });
-                }
+
+        function _showRating(data) {
+            var div = $('<div class="card-rating"></div>');
+            if (data.imdb) {
+                div.append('<div class="rating-item imdb"><div class="rating-value">' + data.imdb + '</div><div class="rating-label">IMDB</div></div>');
             }
-        }
-        
-        // Функція для обробки головної активності
-        function processMainActivity(e) {
-            if (e.component === 'main') {
-                const cards = $('.card');
-                
-                if (cards.length) {
-                    cards.each(function() {
-                        const card = $(this)[0].card;
-                        if (card && card.id) {
-                            addRatingToCard(card);
-                        }
-                    });
-                }
+            if (data.tmdb) {
+                div.append('<div class="rating-item tmdb"><div class="rating-value">' + data.tmdb + '</div><div class="rating-label">TMDB</div></div>');
             }
+            card.element.find('.card__view').append(div);
         }
-        
-        // Додаємо слухачів подій
-        Lampa.Listener.follow('full', processFullActivity);
-        Lampa.Listener.follow('activity', processMainActivity);
-        
-        // Показуємо повідомлення про успішне підключення плагіна
-        Lampa.Noty.show('IMDB Ratings плагін успішно активовано');
-        
-        // Додаємо плагін до списку в налаштуваннях
-        const plugins = window.lampa_settings.plugins || [];
-        
-        // Перевіряємо, чи плагін вже доданий
-        const existingPlugin = plugins.find(p => p.url === 'IMDB Ratings' || p.name === 'IMDB Ratings');
-        
-        if (!existingPlugin) {
-            plugins.push({
-                name: 'IMDB Ratings',
-                version: '1.0.0',
-                url: 'IMDB Ratings',
-                description: 'Показує рейтинг IMDB для фільмів',
-                status: true
-            });
+
+        function _getCache(id) {
+            var cache = Lampa.Storage.cache('imdb_rating', 500, {});
+            var timestamp = new Date().getTime();
             
+            if (cache[id]) {
+                if ((timestamp - cache[id].timestamp) > params.cache_time) {
+                    delete cache[id];
+                    Lampa.Storage.set('imdb_rating', cache);
+                    return false;
+                }
+                return cache[id];
+            }
+            return false;
+        }
+
+        function _setCache(id, data) {
+            var cache = Lampa.Storage.cache('imdb_rating', 500, {});
+            cache[id] = data;
+            Lampa.Storage.set('imdb_rating', cache);
+            return data;
+        }
+    }
+
+    function startPlugin() {
+        var plugins = window.lampa_settings.plugins;
+        
+        if (!plugins) {
+            plugins = [];
             window.lampa_settings.plugins = plugins;
         }
-        
-        console.log('IMDB Ratings плагін успішно ініціалізовано');
+
+        plugins.push({
+            name: 'IMDB Ratings',
+            version: '1.0.0',
+            description: 'Display IMDB and TMDB ratings on movie cards',
+            status: true
+        });
+
+        Lampa.Listener.follow('full', function(e) {
+            if (e.type === 'complite') {
+                var items = e.object.activity.render().find('.items-line > div');
+                if (items.length) {
+                    items.each(function() {
+                        var card = $(this)[0].card;
+                        if (card && card.id) addRatings(card);
+                    });
+                }
+            }
+        });
+
+        // Show notification on successful load
+        Lampa.Noty.show('IMDB Ratings plugin activated');
     }
-    
-    // Якщо додаток вже готовий, ініціалізуємо плагін негайно
+
+    var style = document.createElement('style');
+    style.textContent = `
+        .card-rating {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.75);
+            padding: 8px;
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            z-index: 2;
+        }
+        .rating-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: white;
+        }
+        .rating-value {
+            font-size: 16px;
+            font-weight: 600;
+            line-height: 1;
+        }
+        .rating-label {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-top: 2px;
+        }
+        .imdb .rating-label {
+            color: #f5c518;
+        }
+        .tmdb .rating-label {
+            color: #01b4e4;
+        }
+    `;
+    document.head.appendChild(style);
+
     if (window.appready) {
-        init();
+        startPlugin();
     } else {
-        // Чекаємо готовності додатка
-        Lampa.Listener.follow('app', function(event) {
-            if (event.type === 'ready') {
-                init();
+        Lampa.Listener.follow('app', function(e) {
+            if (e.type === 'ready') {
+                startPlugin();
             }
         });
     }

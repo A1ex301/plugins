@@ -10,7 +10,7 @@
 
         var params = {
             url: 'https://www.omdbapi.com/',
-            api_key: 'YOUR_OMDB_API_KEY', // Replace with your API key
+            api_key: 'e0a2c76f', // Replace with your API key
             cache_time: 60 * 60 * 24 * 1000 // 24 hours cache
         };
 

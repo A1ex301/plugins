@@ -12,7 +12,7 @@
 			id: card.id,
 			url: imdb_prox,
 			headers: {
-				'X-API-KEY': 'your_omdb_api_key' // Замініть на ваш ключ API OMDb
+				'X-API-KEY': 'e0a2c76f' // Замініть на ваш ключ API OMDb
 			},
 			cache_time: 60 * 60 * 24 * 1000 //86400000 сек = 1 день Время кэша в секундах
 		};

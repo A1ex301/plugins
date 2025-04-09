@@ -1,82 +1,123 @@
 (function () {
 'use strict';
 
-function rating_rt(card) {
-    var network = new Lampa.Reguest();
-    var clean_title = cleanTitle(card.title);
-    var search_date = card.release_date || card.first_air_date || card.last_air_date || '0000';
-    var search_year = parseInt((search_date + '').slice(0, 4));
-    var orig = card.original_title || card.original_name;
+function RTPlugin(object) {
+    var plugin = this;
+    this.object = object;
     
-    var params = {
-        id: card.id,
-        cache_time: 60 * 60 * 24 * 1000, // 1 день
+    // Стили для оформления рейтинга
+    var customCSS = `
+        .rotten-tomato {
+            background-color: #FA320A;
+            color: white;
+            border-radius: 3px;
+            padding: 0px 4px;
+        }
+        .rt-icon {
+            height: 18px;
+            width: 18px;
+            vertical-align: middle;
+            margin-right: 5px;
+            margin-left: -1px;
+        }
+    `;
+    
+    // Добавляем стили на страницу
+    $('head').append('<style>' + customCSS + '</style>');
+    
+    // Настройки плагина
+    this.params = {
+        cache_time: 60 * 60 * 24 * 1000, // 1 день в мс
         api_key: 'e0a2c76f'
     };
     
-    getRating();
-
-    function getRating() {
-        var movieRating = _getCache(params.id);
-        if (movieRating) {
-            return _showRating(movieRating[params.id]);
+    // Подключаемся к событию показа карточки фильма
+    this.start = function () {
+        Lampa.Listener.follow('full', function (e) {
+            if (e.type == 'complite') {
+                var render = e.object.activity.render();
+                var movie = e.data.movie;
+                
+                // Если рейтинги скрыты, показываем анимацию загрузки
+                if ($('.rate--kp', render).hasClass('hide') && !$('.rt_rating_load', render).length) {
+                    $('.info__rate', render).after('<div class="rt_rating_load" style="width:2em;margin-top:1em;margin-right:1em"><div class="broadcast__scan"><div></div></div><div>');
+                    plugin.getRatings(movie, render);
+                }
+                
+                // Заменяем все надписи KP на RT
+                setTimeout(function() {
+                    $('.rate--kp', render).find('.rate__type').text('RT');
+                }, 100);
+            }
+        });
+    };
+    
+    // Получение рейтингов
+    this.getRatings = function (movie, render) {
+        var network = new Lampa.Reguest();
+        var cache = this.getCache(movie.id);
+        
+        if (cache) {
+            this.showRatings(cache, render);
         } else {
-            if (card.imdb_id) {
-                // Если у нас есть IMDb ID, используем его
-                var url = 'https://www.omdbapi.com/?i=' + card.imdb_id + '&apikey=' + params.api_key;
-                getData(url);
-            } else {
-                // Иначе, сначала пробуем поиск по оригинальному названию
-                var orig_title = cleanTitle(orig || card.title);
-                var url = 'https://www.omdbapi.com/?t=' + encodeURIComponent(orig_title) + '&y=' + search_year + '&apikey=' + params.api_key;
-                network.clear();
-                network.timeout(15000);
+            var searchByImdbId = function() {
+                if (movie.imdb_id) {
+                    var url = 'https://www.omdbapi.com/?i=' + movie.imdb_id + '&apikey=' + plugin.params.api_key;
+                    network.silent(url, function (json) {
+                        if (json && json.Response === 'True') {
+                            plugin.saveAndShowRatings(json, movie.id, render);
+                        } else {
+                            searchByTitle();
+                        }
+                    }, function() {
+                        searchByTitle();
+                    });
+                } else {
+                    searchByTitle();
+                }
+            };
+            
+            var searchByTitle = function() {
+                var title = movie.original_title || movie.original_name || movie.title || '';
+                var year = (movie.release_date || movie.first_air_date || '').substring(0, 4);
+                title = plugin.cleanTitle(title);
+                
+                var url = 'https://www.omdbapi.com/?t=' + encodeURIComponent(title) + (year ? '&y=' + year : '') + '&apikey=' + plugin.params.api_key;
+                
                 network.silent(url, function (json) {
                     if (json && json.Response === 'True') {
-                        processData(json);
+                        plugin.saveAndShowRatings(json, movie.id, render);
                     } else {
-                        // Если не нашли по оригинальному названию, пробуем по обычному
-                        var url = 'https://www.omdbapi.com/?t=' + encodeURIComponent(clean_title) + '&y=' + search_year + '&apikey=' + params.api_key;
-                        getData(url);
+                        // Пробуем второй поиск без года
+                        var url2 = 'https://www.omdbapi.com/?t=' + encodeURIComponent(title) + '&apikey=' + plugin.params.api_key;
+                        network.silent(url2, function (json2) {
+                            if (json2 && json2.Response === 'True') {
+                                plugin.saveAndShowRatings(json2, movie.id, render);
+                            } else {
+                                plugin.setDefaultRatings(render);
+                            }
+                        }, function() {
+                            plugin.setDefaultRatings(render);
+                        });
                     }
-                }, function (a, c) {
-                    // Если ошибка при поиске по оригинальному названию, пробуем по обычному
-                    var url = 'https://www.omdbapi.com/?t=' + encodeURIComponent(clean_title) + '&y=' + search_year + '&apikey=' + params.api_key;
-                    getData(url);
+                }, function() {
+                    plugin.setDefaultRatings(render);
                 });
-            }
+            };
+            
+            searchByImdbId();
         }
-    }
+    };
     
-    function getData(url) {
-        network.clear();
-        network.timeout(15000);
-        network.silent(url, function (json) {
-            if (json && json.Response === 'True') {
-                processData(json);
-            } else {
-                // Если не нашли, пробуем поиск без указания года
-                var title_no_year = clean_title;
-                var url_no_year = 'https://www.omdbapi.com/?t=' + encodeURIComponent(title_no_year) + '&apikey=' + params.api_key;
-                
-                network.clear();
-                network.timeout(15000);
-                network.silent(url_no_year, function (json) {
-                    if (json && json.Response === 'True') {
-                        processData(json);
-                    } else {
-                        saveRating(0, 0);
-                    }
-                }, function (a, c) {
-                    saveRating(0, 0);
-                });
-            }
-        }, function (a, c) {
-            saveRating(0, 0);
-        });
-    }
+    // Отображение рейтингов по умолчанию (если не найдены)
+    this.setDefaultRatings = function(render) {
+        $('.rt_rating_load', render).remove();
+        $('.rate--imdb', render).removeClass('hide');
+        $('.rate--kp', render).addClass('hide');
+    };
     
-    function processData(json) {
+    // Сохранение и отображение рейтингов
+    this.saveAndShowRatings = function(json, movie_id, render) {
         var imdbRating = json.imdbRating ? parseFloat(json.imdbRating) : 0;
         var rtRating = 0;
         
@@ -84,7 +125,6 @@ function rating_rt(card) {
         if (json.Ratings && json.Ratings.length > 0) {
             for (var i = 0; i < json.Ratings.length; i++) {
                 if (json.Ratings[i].Source === 'Rotten Tomatoes') {
-                    // Извлекаем только числа из строки типа "75%"
                     var rtStr = json.Ratings[i].Value || '0%';
                     rtRating = parseInt(rtStr.replace(/[^0-9]/g, '')) || 0;
                     break;
@@ -92,105 +132,87 @@ function rating_rt(card) {
             }
         }
         
-        saveRating(imdbRating, rtRating);
-    }
-
-    function saveRating(imdbRating, rtRating) {
-        var movieRating = _setCache(params.id, {
-            imdb: imdbRating || 0,
-            rt: rtRating || 0,
+        var data = {
+            imdb: imdbRating,
+            rt: rtRating,
             timestamp: new Date().getTime()
-        });
-        return _showRating(movieRating);
-    }
-
-    function cleanTitle(str) {
-        if (!str) return '';
-        str = str.toLowerCase();
-        // Удаляем год в скобках, если он есть
-        str = str.replace(/\(\d{4}\)/, '');
-        // Удаляем слова "фильм" и т.п.
-        str = str.replace(/\b(film|фильм|movie|series|сериал)\b/gi, '');
-        // Удаляем все специальные символы кроме букв и цифр
-        str = str.replace(/[\s.,:;''`~!@#$%^&*()_+=\[\]{}<>\/\\|?-]+/g, ' ');
-        // Удаляем двойные пробелы и обрезаем строку
-        return str.replace(/\s+/g, ' ').trim();
-    }
-
-    function _getCache(movie) {
-        var timestamp = new Date().getTime();
-        var cache = Lampa.Storage.cache('rt_rating', 500, {}); // лимит 500 ключей
-        if (cache[movie]) {
-            if ((timestamp - cache[movie].timestamp) > params.cache_time) {
-                delete cache[movie];
-                Lampa.Storage.set('rt_rating', cache);
-                return false;
-            }
-        } else return false;
-        return cache;
-    }
-
-    function _setCache(movie, data) {
-        var timestamp = new Date().getTime();
-        var cache = Lampa.Storage.cache('rt_rating', 500, {}); // лимит 500 ключей
-        if (!cache[movie]) {
-            cache[movie] = data;
-            Lampa.Storage.set('rt_rating', cache);
-        } else {
-            if ((timestamp - cache[movie].timestamp) > params.cache_time) {
-                data.timestamp = timestamp;
-                cache[movie] = data;
-                Lampa.Storage.set('rt_rating', cache);
-            } else data = cache[movie];
-        }
-        return data;
-    }
-
-    function _showRating(data) {
-        if (data) {
-            var imdb_rating = !isNaN(data.imdb) && data.imdb !== null ? parseFloat(data.imdb).toFixed(1) : '0.0';
-            var rt_rating = !isNaN(data.rt) && data.rt !== null ? data.rt + '%' : '0%';
-            
-            var render = Lampa.Activity.active().activity.render();
-            $('.wait_rating', render).remove();
-            
-            // Показываем IMDb рейтинг
-            $('.rate--imdb', render).removeClass('hide').find('> div').eq(0).text(imdb_rating);
-            
-            // Заменяем KP рейтинг на Rotten Tomatoes
+        };
+        
+        this.setCache(movie_id, data);
+        this.showRatings(data, render);
+    };
+    
+    // Отображение рейтингов
+    this.showRatings = function(data, render) {
+        $('.rt_rating_load', render).remove();
+        
+        // IMDb рейтинг
+        var imdb_rating = !isNaN(data.imdb) && data.imdb !== null ? parseFloat(data.imdb).toFixed(1) : '0.0';
+        $('.rate--imdb', render).removeClass('hide').find('> div').eq(0).text(imdb_rating);
+        
+        // RT рейтинг
+        if (data.rt && data.rt > 0) {
             var $kp = $('.rate--kp', render).removeClass('hide');
-            $kp.find('>div').eq(0).text(rt_rating);
+            $kp.find('> div').eq(0).text(data.rt + '%');
+            $kp.find('.rate__type').text('RT');
             
-            // Пробуем использовать локальную иконку или запасную из GitHub
+            // Устанавливаем иконку
             var baseUrl = window.location.origin;
             var iconUrl = baseUrl + '/tomato_icon.svg';
             
-            // Проверяем доступность иконки
             var img = new Image();
             img.onload = function() {
                 $kp.find('img').attr('src', iconUrl);
             };
             img.onerror = function() {
-                // Запасной вариант если локальная иконка недоступна
+                // Резервная иконка
                 $kp.find('img').attr('src', 'https://raw.githubusercontent.com/nb557/plugins/main/rating_icons/rt.png');
             };
             img.src = iconUrl;
+        } else {
+            $('.rate--kp', render).addClass('hide');
         }
-    }
-}
-
-function startPlugin() {
-    window.rating_rt = true;
-    Lampa.Listener.follow('full', function (e) {
-        if (e.type == 'complite') {
-            var render = e.object.activity.render();
-            if ($('.rate--kp', render).hasClass('hide') && !$('.wait_rating', render).length) {
-                $('.info__rate', render).after('<div style="width:2em;margin-top:1em;margin-right:1em" class="wait_rating"><div class="broadcast__scan"><div></div></div><div>');
-                rating_rt(e.data.movie);
+    };
+    
+    // Работа с кешем
+    this.getCache = function(movie_id) {
+        var cache = Lampa.Storage.cache('rt_rating_data', 500, {});
+        var timestamp = new Date().getTime();
+        
+        if (cache[movie_id]) {
+            if ((timestamp - cache[movie_id].timestamp) < this.params.cache_time) {
+                return cache[movie_id];
+            } else {
+                delete cache[movie_id];
+                Lampa.Storage.set('rt_rating_data', cache);
             }
         }
-    });
+        return false;
+    };
+    
+    this.setCache = function(movie_id, data) {
+        var cache = Lampa.Storage.cache('rt_rating_data', 500, {});
+        cache[movie_id] = data;
+        Lampa.Storage.set('rt_rating_data', cache);
+        return data;
+    };
+    
+    // Очистка названия фильма
+    this.cleanTitle = function(title) {
+        if (!title) return '';
+        title = title.toLowerCase();
+        // Удаляем год в скобках
+        title = title.replace(/\(\d{4}\)/, '');
+        // Удаляем слова "фильм" и т.п.
+        title = title.replace(/\b(film|фильм|movie|series|сериал)\b/gi, '');
+        // Удаляем специальные символы
+        title = title.replace(/[\s.,:;''`~!@#$%^&*()_+=\[\]{}<>\/\\|?-]+/g, ' ');
+        // Удаляем двойные пробелы
+        return title.replace(/\s+/g, ' ').trim();
+    };
 }
 
-if (!window.rating_rt) startPlugin();
+var rt_plugin = new RTPlugin({});
+Lampa.Plugins.add('rt_rating', rt_plugin);
+
 })();

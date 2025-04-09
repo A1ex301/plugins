@@ -3,7 +3,7 @@
 
     /**
      * Plugin for Lampa - displays Rotten Tomatoes ratings using OMDB API
-     * Replaces the original Kinopoisk ratings plugin with Rotten Tomatoes information
+     * Replaces the original Kinopoisk ratings plugin with Rotten Tomatoes informationф
      */
     function Rating(object) {
         this.object = object;
@@ -24,7 +24,7 @@
         this.enable = true;
         
         Lampa.Template.add('rating_style', this.getStyle());
-        $('body').append(Lampa.Template.get('rating_style', {}, true));
+        Lampa.Utils.append(Lampa.Template.get('rating_style', {}, true), document.body);
 
         Lampa.Listener.follow('full', this.build);
         Lampa.Listener.follow('background', this.background);
@@ -45,8 +45,9 @@
      * @param {Object} e - Event object
      */
     Rating.prototype.background = function (e) {
-        if (e.background && e.background.indexOf('mb_bg') !== -1 && $('.rating--open').length) {
-            $('.rating--open').remove();
+        if (e.background && e.background.indexOf('mb_bg') !== -1) {
+            const ratingsOpen = document.querySelector('.rating--open');
+            if (ratingsOpen) ratingsOpen.remove();
         }
     };
 
@@ -61,32 +62,39 @@
         
         // Use imdb ID if available
         if (data.card.imdb_id) {
-            url = `https://www.omdbapi.com/?i=${data.card.imdb_id}&apikey=${this.omdb_api_key}`;
+            url = 'https://www.omdbapi.com/?i=' + data.card.imdb_id + '&apikey=' + this.omdb_api_key;
         } else {
             // If no IMDb ID, search by title
             let year = data.card.release_date || data.card.first_air_date || '';
             year = year ? (new Date(year)).getFullYear() : '';
             
-            url = `https://www.omdbapi.com/?t=${encodeURIComponent(title)}&y=${year}&apikey=${this.omdb_api_key}`;
+            url = 'https://www.omdbapi.com/?t=' + encodeURIComponent(title) + '&y=' + year + '&apikey=' + this.omdb_api_key;
         }
 
         // Make API request
-        $.ajax({
-            url: url,
-            type: 'GET',
-            dataType: 'json',
-            success: function (response) {
-                if (response && response.Response === 'True') {
-                    const ratingsData = this.extractRatings(response);
-                    call(ratingsData);
-                } else {
+        let xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.onload = function() {
+            if (xhr.status >= 200 && xhr.status < 400) {
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response && response.Response === 'True') {
+                        const ratingsData = this.extractRatings(response);
+                        call(ratingsData);
+                    } else {
+                        call(null);
+                    }
+                } catch (e) {
                     call(null);
                 }
-            }.bind(this),
-            error: function () {
+            } else {
                 call(null);
             }
-        });
+        }.bind(this);
+        xhr.onerror = function() {
+            call(null);
+        };
+        xhr.send();
     };
     
     /**
@@ -96,12 +104,15 @@
      */
     Rating.prototype.extractRatings = function (response) {
         let rtRating = '';
-        let rtAudienceScore = '';
         
         // Find Rotten Tomatoes rating in the Ratings array
         if (response.Ratings && Array.isArray(response.Ratings)) {
-            const rtScore = response.Ratings.find(r => r.Source === 'Rotten Tomatoes');
-            rtRating = rtScore ? rtScore.Value : '';
+            for (let i = 0; i < response.Ratings.length; i++) {
+                if (response.Ratings[i].Source === 'Rotten Tomatoes') {
+                    rtRating = response.Ratings[i].Value;
+                    break;
+                }
+            }
         }
         
         return {
@@ -126,9 +137,16 @@
         if (!card.cardid) return;
 
         // Add the tomato icon to the movie card
-        $('.card--category', card.render()).append('<div class="card__icon icon--rt-rating"></div>');
-
-        card.render().on('hover:enter', this.openDetails.bind(this, card));
+        const cardElement = card.render();
+        const categoryElement = cardElement.querySelector('.card--category');
+        
+        if (categoryElement) {
+            const rtIcon = document.createElement('div');
+            rtIcon.className = 'card__icon icon--rt-rating';
+            categoryElement.appendChild(rtIcon);
+            
+            cardElement.addEventListener('hover:enter', this.openDetails.bind(this, card));
+        }
     };
 
     /**
@@ -136,57 +154,73 @@
      * @param {Object} card - Card data
      */
     Rating.prototype.openDetails = function (card) {
-        if ($('.rating--open').length) $('.rating--open').remove();
+        const existingRating = document.querySelector('.rating--open');
+        if (existingRating) existingRating.remove();
 
         // Create UI components
-        let network = $('<div class="rating-loading"></div>');
-        let body = $('<div class="rating-body"></div>');
-        let loading = $('<div class="rating__loading"><div class="broadcast__scan"><div></div></div></div>');
-        let container = $('<div class="rating rating--open"></div>');
-
-        body.append(loading);
-        container.append(body);
+        const body = document.createElement('div');
+        body.className = 'rating-body';
         
-        $('body').append(container);
+        const loading = document.createElement('div');
+        loading.className = 'rating__loading';
+        loading.innerHTML = '<div class="broadcast__scan"><div></div></div>';
+        
+        const container = document.createElement('div');
+        container.className = 'rating rating--open';
+        
+        body.appendChild(loading);
+        container.appendChild(body);
+        document.body.appendChild(container);
 
         // Load the data
         this.getRatings({
             card: card.card
         }, function (data) {
-            container.addClass('rating--loaded');
+            container.classList.add('rating--loaded');
             loading.remove();
             
             if (data) {
-                let html = `<div class="rating__header">
-                    <div class="rating__title">${data.title}</div>
-                    <div class="rating__year">${data.year}${data.runtime ? ' • ' + data.runtime : ''}</div>
-                </div>`;
+                let html = '<div class="rating__header">' +
+                    '<div class="rating__title">' + data.title + '</div>' +
+                    '<div class="rating__year">' + data.year + (data.runtime ? ' • ' + data.runtime : '') + '</div>' +
+                '</div>';
                 
                 // Display Rotten Tomatoes score with tomato icon
                 if (data.rt) {
-                    const rtValue = parseInt(data.rt);
+                    let rtValue = parseInt(data.rt);
                     let rtIconClass = 'rotten';
                     
                     // Change icon based on the score
-                    if (rtValue >= 60) {
-                        rtIconClass = 'fresh';
-                    } else if (rtValue < 0) {
-                        rtIconClass = 'unknown';
+                    if (!isNaN(rtValue)) {
+                        if (rtValue >= 60) {
+                            rtIconClass = 'fresh';
+                        } else if (rtValue < 0) {
+                            rtIconClass = 'unknown';
+                        }
+                    } else {
+                        // Try to extract the number if it's in format "93%"
+                        const match = data.rt.match(/(\d+)%/);
+                        if (match && match[1]) {
+                            rtValue = parseInt(match[1]);
+                            if (rtValue >= 60) {
+                                rtIconClass = 'fresh';
+                            }
+                        }
                     }
                     
-                    html += `<div class="rating__rt rating__rt--${rtIconClass}">
-                        <div class="rating__rt-icon"></div>
-                        <div class="rating__rt-score">${data.rt}</div>
-                    </div>`;
+                    html += '<div class="rating__rt rating__rt--' + rtIconClass + '">' +
+                        '<div class="rating__rt-icon"></div>' +
+                        '<div class="rating__rt-score">' + data.rt + '</div>' +
+                    '</div>';
                 }
                 
                 html += '<div class="rating__other-scores">';
                 
                 // Display IMDb score
                 if (data.imdb) {
-                    html += `<div class="rating__stat rating__stat--imdb">
-                        <span>IMDb</span>${data.imdb}
-                    </div>`;
+                    html += '<div class="rating__stat rating__stat--imdb">' +
+                        '<span>IMDb</span>' + data.imdb +
+                    '</div>';
                 }
                 
                 // Display Metascore
@@ -198,47 +232,50 @@
                     if (metacritic >= 75) metacolorClass = 'good';
                     else if (metacritic < 50) metacolorClass = 'bad';
                     
-                    html += `<div class="rating__stat rating__stat--meta rating__stat--${metacolorClass}">
-                        <span>META</span>${data.metascore}
-                    </div>`;
+                    html += '<div class="rating__stat rating__stat--meta rating__stat--' + metacolorClass + '">' +
+                        '<span>META</span>' + data.metascore +
+                    '</div>';
                 }
                 
                 html += '</div>';
                 
                 // Add director and actors if available
                 if (data.director && data.director !== 'N/A') {
-                    html += `<div class="rating__credit"><span>Director:</span> ${data.director}</div>`;
+                    html += '<div class="rating__credit"><span>Director:</span> ' + data.director + '</div>';
                 }
                 
                 if (data.actors && data.actors !== 'N/A') {
-                    html += `<div class="rating__credit"><span>Cast:</span> ${data.actors}</div>`;
+                    html += '<div class="rating__credit"><span>Cast:</span> ' + data.actors + '</div>';
                 }
                 
                 // Add plot description
                 if (data.plot && data.plot !== 'N/A') {
-                    html += `<div class="rating__descr">${data.plot}</div>`;
+                    html += '<div class="rating__descr">' + data.plot + '</div>';
                 }
                 
                 // Add movie poster if available
                 if (data.poster && data.poster !== 'N/A') {
-                    html += `<div class="rating__img"><img src="${data.poster}" alt="${data.title}" /></div>`;
+                    html += '<div class="rating__img"><img src="' + data.poster + '" alt="' + data.title + '" /></div>';
                 }
                 
-                body.append(html);
+                body.innerHTML = html;
             } else {
-                body.append(`<div class="rating__error">
-                    <div class="rating__error-icon">!</div>
-                    <div class="rating__error-message">No Rotten Tomatoes ratings found</div>
-                </div>`);
+                body.innerHTML = '<div class="rating__error">' +
+                    '<div class="rating__error-icon">!</div>' +
+                    '<div class="rating__error-message">No Rotten Tomatoes ratings found</div>' +
+                '</div>';
             }
         });
 
         // Handle button press
-        $(window).on('keydown', function (e) {
+        const keydownHandler = function(e) {
             if (e.keyCode === 8 || e.keyCode === 27 || e.keyCode === 461 || e.keyCode === 10009) {
                 container.remove();
+                document.removeEventListener('keydown', keydownHandler);
             }
-        });
+        };
+        
+        document.addEventListener('keydown', keydownHandler);
     };
 
     /**

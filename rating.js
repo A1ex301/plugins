@@ -26,9 +26,24 @@ function rating_rt(card) {
                 var url = 'https://www.omdbapi.com/?i=' + card.imdb_id + '&apikey=' + params.api_key;
                 getData(url);
             } else {
-                // Иначе, ищем по названию
-                var url = 'https://www.omdbapi.com/?t=' + encodeURIComponent(clean_title) + '&y=' + search_year + '&apikey=' + params.api_key;
-                getData(url);
+                // Иначе, сначала пробуем поиск по оригинальному названию
+                var orig_title = cleanTitle(orig || card.title);
+                var url = 'https://www.omdbapi.com/?t=' + encodeURIComponent(orig_title) + '&y=' + search_year + '&apikey=' + params.api_key;
+                network.clear();
+                network.timeout(15000);
+                network.silent(url, function (json) {
+                    if (json && json.Response === 'True') {
+                        processData(json);
+                    } else {
+                        // Если не нашли по оригинальному названию, пробуем по обычному
+                        var url = 'https://www.omdbapi.com/?t=' + encodeURIComponent(clean_title) + '&y=' + search_year + '&apikey=' + params.api_key;
+                        getData(url);
+                    }
+                }, function (a, c) {
+                    // Если ошибка при поиске по оригинальному названию, пробуем по обычному
+                    var url = 'https://www.omdbapi.com/?t=' + encodeURIComponent(clean_title) + '&y=' + search_year + '&apikey=' + params.api_key;
+                    getData(url);
+                });
             }
         }
     }
@@ -38,28 +53,46 @@ function rating_rt(card) {
         network.timeout(15000);
         network.silent(url, function (json) {
             if (json && json.Response === 'True') {
-                var imdbRating = json.imdbRating ? parseFloat(json.imdbRating) : 0;
-                var rtRating = 0;
-                
-                // Ищем рейтинг Rotten Tomatoes
-                if (json.Ratings && json.Ratings.length > 0) {
-                    for (var i = 0; i < json.Ratings.length; i++) {
-                        if (json.Ratings[i].Source === 'Rotten Tomatoes') {
-                            // Извлекаем только числа из строки типа "75%"
-                            var rtStr = json.Ratings[i].Value || '0%';
-                            rtRating = parseInt(rtStr.replace(/[^0-9]/g, '')) || 0;
-                            break;
-                        }
-                    }
-                }
-                
-                saveRating(imdbRating, rtRating);
+                processData(json);
             } else {
-                saveRating(0, 0);
+                // Если не нашли, пробуем поиск без указания года
+                var title_no_year = clean_title;
+                var url_no_year = 'https://www.omdbapi.com/?t=' + encodeURIComponent(title_no_year) + '&apikey=' + params.api_key;
+                
+                network.clear();
+                network.timeout(15000);
+                network.silent(url_no_year, function (json) {
+                    if (json && json.Response === 'True') {
+                        processData(json);
+                    } else {
+                        saveRating(0, 0);
+                    }
+                }, function (a, c) {
+                    saveRating(0, 0);
+                });
             }
         }, function (a, c) {
             saveRating(0, 0);
         });
+    }
+    
+    function processData(json) {
+        var imdbRating = json.imdbRating ? parseFloat(json.imdbRating) : 0;
+        var rtRating = 0;
+        
+        // Ищем рейтинг Rotten Tomatoes
+        if (json.Ratings && json.Ratings.length > 0) {
+            for (var i = 0; i < json.Ratings.length; i++) {
+                if (json.Ratings[i].Source === 'Rotten Tomatoes') {
+                    // Извлекаем только числа из строки типа "75%"
+                    var rtStr = json.Ratings[i].Value || '0%';
+                    rtRating = parseInt(rtStr.replace(/[^0-9]/g, '')) || 0;
+                    break;
+                }
+            }
+        }
+        
+        saveRating(imdbRating, rtRating);
     }
 
     function saveRating(imdbRating, rtRating) {
@@ -72,7 +105,16 @@ function rating_rt(card) {
     }
 
     function cleanTitle(str) {
-        return (str || '').replace(/[\s.,:;''`!?]+/g, ' ').trim();
+        if (!str) return '';
+        str = str.toLowerCase();
+        // Удаляем год в скобках, если он есть
+        str = str.replace(/\(\d{4}\)/, '');
+        // Удаляем слова "фильм" и т.п.
+        str = str.replace(/\b(film|фильм|movie|series|сериал)\b/gi, '');
+        // Удаляем все специальные символы кроме букв и цифр
+        str = str.replace(/[\s.,:;''`~!@#$%^&*()_+=\[\]{}<>\/\\|?-]+/g, ' ');
+        // Удаляем двойные пробелы и обрезаем строку
+        return str.replace(/\s+/g, ' ').trim();
     }
 
     function _getCache(movie) {
@@ -138,7 +180,7 @@ function rating_rt(card) {
 }
 
 function startPlugin() {
-    window.rt_rating_plugin = true;
+    window.rating_rt = true;
     Lampa.Listener.follow('full', function (e) {
         if (e.type == 'complite') {
             var render = e.object.activity.render();
@@ -150,5 +192,5 @@ function startPlugin() {
     });
 }
 
-if (!window.rt_rating_plugin) startPlugin();
+if (!window.rating_rt) startPlugin();
 })();

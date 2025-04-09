@@ -1,101 +1,117 @@
 (function () {
-  var MyObject = {
-    init: function () {
-      Lampa.Api.resources('script', [
-        'https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js'
-      ]);
-  
-      Lampa.Listener.follow('app', function (e) {
-        if (e.type == 'ready') {
-          MyObject.ready();
-        }
-      });
-    },
-    ready: function () {
-      $('body').append('<div id="rt_test_div" style="display:none">RT Plugin Loaded</div>');
-  
-      /* Добавляем в меню */
-      var menu_info = $('<li class="menu__item selector" data-action="rtinfo"><div class="menu__ico"><svg fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"></path></svg></div><div class="menu__text">RT Plugin</div></li>');
-  
-      menu_info.on('hover:enter', function () {
-        Lampa.Modal.open({
-          title: 'Rotten Tomatoes Plugin',
-          html: '<div style="padding: 1.5em">Plugin for showing Rotten Tomatoes ratings is active</div>',
-          onBack: function () {
-            Lampa.Modal.close();
-          }
-        });
-      });
-  
-      $('.menu .menu__list').eq(0).append(menu_info);
-  
-      // Добавляем слушатель для карточек
-      Lampa.Listener.follow('full', function (e) {
-        if (e.type == 'complite') {
-          var btn = $('<div class="full-descr__item selector" style="background-color:#fa320a;color:white;">RT Rating</div>');
-          $('.full-descr__advanced-items', e.data).append(btn);
-          
-          btn.on('hover:enter', function () {
-            var title = e.data.movie.title || e.data.movie.name;
-            var year = (e.data.movie.release_date || e.data.movie.first_air_date || '').slice(0, 4);
-            
-            Lampa.Modal.open({
-              title: 'Loading...',
-              html: '<div style="text-align:center;padding:2em;">Loading Rotten Tomatoes rating for: ' + title + '</div>',
-              size: 'small',
-              onBack: function () {
-                Lampa.Modal.close();
-                Lampa.Controller.toggle('full_descr');
-              }
-            });
-            
-            // Получаем данные из OMDB API
-            $.ajax({
-              url: 'https://www.omdbapi.com/?t=' + encodeURIComponent(title) + '&y=' + year + '&apikey=e0a2c76f',
-              dataType: 'json',
-              success: function (data) {
-                var html = '<div style="padding:1.5em">';
-                
-                if (data && data.Response === 'True') {
-                  html += '<div style="font-size:1.2em;margin-bottom:1em;font-weight:bold;">' + data.Title + ' (' + data.Year + ')</div>';
-                  
-                  var rtRating = '';
-                  
-                  if (data.Ratings && data.Ratings.length) {
-                    for (var i = 0; i < data.Ratings.length; i++) {
-                      var source = data.Ratings[i].Source;
-                      var value = data.Ratings[i].Value;
-                      
-                      if (source === 'Rotten Tomatoes') {
-                        rtRating = value;
-                        html += '<div style="color:#fa320a;font-weight:bold;font-size:1.1em;margin-bottom:0.5em">Rotten Tomatoes: ' + value + '</div>';
-                      } else {
-                        html += '<div style="margin-bottom:0.5em">' + source + ': ' + value + '</div>';
-                      }
-                    }
-                  }
-                  
-                  if (!rtRating) {
-                    html += '<div>No Rotten Tomatoes rating found</div>';
-                  }
+    'use strict';
+
+    function imdb_rating(card) {
+        var network = new Lampa.Reguest();
+        var clean_title = cleanTitle(card.title);
+        var search_date = card.release_date || card.first_air_date || card.last_air_date || '0000';
+        var search_year = parseInt((search_date + '').slice(0, 4));
+        var orig = card.original_title || card.original_name;
+
+        var params = {
+            id: card.id,
+            cache_time: 60 * 60 * 24 * 1000 // 1 день в миллисекундах
+        };
+
+        getRating();
+
+        function getRating() {
+            var movieRating = _getCache(params.id);
+            if (movieRating) {
+                return _showRating(movieRating[params.id]);
+            } else {
+                if (card.imdb_id) {
+                    // Если у нас есть IMDb ID, просто сохраняем рейтинг
+                    saveRating();
                 } else {
-                  html += '<div>No ratings found</div>';
+                    // Иначе, пробуем найти рейтинг IMDb по API OMDb
+                    searchFilm();
                 }
-                
-                html += '</div>';
-                
-                Lampa.Modal.update(html);
-                Lampa.Modal.title('Rotten Tomatoes');
-              },
-              error: function () {
-                Lampa.Modal.update('<div style="text-align:center;padding:2em;">Error loading data</div>');
-              }
-            });
-          });
+            }
         }
-      });
+
+        function searchFilm() {
+            var url = 'https://www.omdbapi.com/?t=' + encodeURIComponent(clean_title) + '&y=' + search_year + '&apikey=e0a2c76f';
+            
+            network.clear();
+            network.timeout(15000);
+            network.silent(url, function (json) {
+                if (json && json.Response === 'True' && json.imdbRating) {
+                    saveRating(parseFloat(json.imdbRating));
+                } else {
+                    saveRating(0);
+                }
+            }, function (a, c) {
+                saveRating(0);
+            });
+        }
+
+        function saveRating(imdbRating) {
+            var movieRating = _setCache(params.id, {
+                imdb: imdbRating || 0,
+                timestamp: new Date().getTime()
+            });
+            return _showRating(movieRating);
+        }
+
+        function cleanTitle(str) {
+            return (str || '').replace(/[\s.,:;''`!?]+/g, ' ').trim();
+        }
+
+        function _getCache(movie) {
+            var timestamp = new Date().getTime();
+            var cache = Lampa.Storage.cache('imdb_rating', 500, {}); // лимит 500 ключей
+            if (cache[movie]) {
+                if ((timestamp - cache[movie].timestamp) > params.cache_time) {
+                    // Если кеш истёк, чистим его
+                    delete cache[movie];
+                    Lampa.Storage.set('imdb_rating', cache);
+                    return false;
+                }
+            } else return false;
+            return cache;
+        }
+
+        function _setCache(movie, data) {
+            var timestamp = new Date().getTime();
+            var cache = Lampa.Storage.cache('imdb_rating', 500, {}); // лимит 500 ключей
+            if (!cache[movie]) {
+                cache[movie] = data;
+                Lampa.Storage.set('imdb_rating', cache);
+            } else {
+                if ((timestamp - cache[movie].timestamp) > params.cache_time) {
+                    data.timestamp = timestamp;
+                    cache[movie] = data;
+                    Lampa.Storage.set('imdb_rating', cache);
+                } else data = cache[movie];
+            }
+            return data;
+        }
+
+        function _showRating(data) {
+            if (data) {
+                var imdb_rating = !isNaN(data.imdb) && data.imdb !== null ? parseFloat(data.imdb).toFixed(1) : '0.0';
+                var render = Lampa.Activity.active().activity.render();
+                $('.wait_rating', render).remove();
+                $('.rate--imdb', render).removeClass('hide').find('> div').eq(0).text(imdb_rating);
+                // Скрываем оценку Кинопоиска
+                $('.rate--kp', render).addClass('hide');
+            }
+        }
     }
-  };
-  
-  MyObject.init();
+
+    function startPlugin() {
+        window.rating_plugin = true;
+        Lampa.Listener.follow('full', function (e) {
+            if (e.type == 'complite') {
+                var render = e.object.activity.render();
+                if ($('.rate--imdb', render).hasClass('hide') && !$('.wait_rating', render).length) {
+                    $('.info__rate', render).after('<div style="width:2em;margin-top:1em;margin-right:1em" class="wait_rating"><div class="broadcast__scan"><div></div></div><div>');
+                    imdb_rating(e.data.movie);
+                }
+            }
+        });
+    }
+
+    if (!window.rating_plugin) startPlugin();
 })();

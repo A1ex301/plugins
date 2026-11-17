@@ -50,10 +50,20 @@
             url: server.url + '/settings',
             method: 'POST',
             data: JSON.stringify({ action: 'get' }),
-            contentType: 'application/json; charset=utf-8',
+            // Залишаємо стандартний content-type jQuery, як у штатних запитах Lampa.
+            // Це важливо для CORS/preflight на деяких TorrServer.
             dataType: 'json',
             cache: false,
             timeout: TIMEOUT,
+            beforeSend: function (xhr) {
+                // Повторюємо авторизацію, яку штатний Request Lampa додає до TorrServer.
+                if (Lampa.Storage.field('torrserver_auth')) {
+                    var login = Lampa.Storage.get('torrserver_login', '');
+                    var password = Lampa.Storage.value('torrserver_password') || '';
+                    var credentials = unescape(encodeURIComponent(login + ':' + password));
+                    xhr.setRequestHeader('Authorization', 'Basic ' + btoa(credentials));
+                }
+            },
             success: function (response) {
                 done(response && typeof response.CacheSize !== 'undefined'
                     ? { online: true, ms: Date.now() - started }

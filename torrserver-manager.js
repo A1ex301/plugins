@@ -69,8 +69,15 @@
                     ? { online: true, ms: Date.now() - started }
                     : { online: false });
             },
-            error: function () {
-                done({ online: false });
+            error: function (xhr, textStatus, errorThrown) {
+                var reason = 'HTTP ' + (xhr && xhr.status ? xhr.status : 0);
+                if (textStatus === 'timeout') reason = 'Тайм-аут (' + (TIMEOUT / 1000) + ' с)';
+                else if (xhr && xhr.status === 0) reason = 'Немає відповіді (можливий CORS, HTTPS/HTTP або недоступний порт)';
+                else if (xhr && xhr.status === 401) reason = '401 — потрібна авторизація';
+                else if (xhr && xhr.status === 403) reason = '403 — доступ заборонено';
+                else if (xhr && xhr.status === 404) reason = '404 — endpoint /settings не знайдено';
+                else if (errorThrown) reason += ' — ' + String(errorThrown);
+                done({ online: false, error: reason });
             }
         });
     }
@@ -121,7 +128,7 @@
         var items = servers.map(function (server, index) {
             var status = statuses[index] || { online: false };
             var marker = server.url === currentUrl ? ' ✓' : '';
-            var state = status.online ? '● Онлайн · ' + status.ms + ' мс' : '○ Недоступний';
+            var state = status.online ? '● Онлайн · ' + status.ms + ' мс' : '○ Недоступний' + (status.error ? ' · ' + status.error : '');
             return { title: server.name + marker + ' — ' + state, value: index };
         });
 
@@ -136,7 +143,7 @@
             onSelect: function (item) {
                 var server = servers[item.value];
                 if (!statuses[item.value] || !statuses[item.value].online) {
-                    notify('Сервер недоступний. Вибери сервер зі статусом «Онлайн».');
+                    notify('Сервер недоступний: ' + ((statuses[item.value] && statuses[item.value].error) || 'невідома помилка'));
                     return;
                 }
                 showSlotChoice(server);

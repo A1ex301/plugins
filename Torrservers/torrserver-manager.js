@@ -214,7 +214,7 @@
             var state = status.online ? '🟢 ' + status.ms + ' мс' : '🔴 ' + (status.error || 'Недоступний');
             var country = server.country ? server.country + ' · ' : '';
             return {
-                title: country + server.name + ' · ' + displayAddress(server.url) + marker + ' — ' + state,
+                title: country + displayAddress(server.url) + marker + ' — ' + state,
                 value: index,
                 online: !!status.online,
                 ms: typeof status.ms === 'number' ? status.ms : Number.MAX_SAFE_INTEGER,

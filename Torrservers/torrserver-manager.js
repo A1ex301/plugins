@@ -6,6 +6,7 @@
 
     var CONFIG_URL = 'https://a1ex301.github.io/plugins/Torrservers/torrserver-servers.json';
     var TIMEOUT = 6000;
+    var settingsBody = null;
 
     function notify(message) {
         if (window.Lampa && Lampa.Noty && Lampa.Noty.show) Lampa.Noty.show(message);
@@ -110,6 +111,26 @@
         return cleanUrl(Lampa.Storage.get(slot === 'two' ? 'torrserver_url_two' : 'torrserver_url', ''));
     }
 
+    // Оновлюємо значення у вже відкритому меню налаштувань без повторного входу.
+    function refreshSettingsFields() {
+        if (!settingsBody || !settingsBody.length) return;
+
+        ['one', 'two'].forEach(function (slot) {
+            var key = slot === 'two' ? 'torrserver_url_two' : 'torrserver_url';
+            var value = Lampa.Storage.get(key, '');
+            settingsBody.find('[data-name="' + key + '"] .settings-param__value')
+                .text(displayAddress(value));
+        });
+
+        var selected = Lampa.Storage.get('torrserver_use_link', 'one');
+        var labels = {
+            one: 'Основне посилання',
+            two: 'Додаткове посилання'
+        };
+        settingsBody.find('[data-name="torrserver_use_link"] .settings-param__value')
+            .text(labels[selected] || labels.one);
+    }
+
     function showSlotChoice(server) {
         Lampa.Select.show({
             title: 'Куди встановити сервер «' + server.name + '»?',
@@ -122,6 +143,7 @@
                 // У налаштування Lampa записуємо адресу без протоколу.
                 Lampa.Storage.set(slot === 'two' ? 'torrserver_url_two' : 'torrserver_url', displayAddress(server.url));
                 Lampa.Storage.set('torrserver_use_link', slot);
+                refreshSettingsFields();
                 notify('Активний TorrServer: ' + server.name + (slot === 'one' ? ' (основне посилання)' : ' (додаткове посилання)'));
             }
         });
@@ -175,6 +197,7 @@
         // Це той самий механізм, який використовує штатний тест швидкості Lampa.
         Lampa.Settings.listener.follow('open', function (event) {
             if (event.name !== 'server') return;
+            settingsBody = event.body;
 
             var anchor = event.body.find('[data-name="torrserver_url_two"]');
             if (!anchor.length || event.body.find('.torrserver-manager-button').length) return;

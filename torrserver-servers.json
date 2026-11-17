@@ -2,8 +2,8 @@
   "version": 1,
   "servers": [
     {
-      "name": "server1",
-      "url": "http://46.8.69.51:8091"
+      "name": "Server1",
+      "url": "46.8.69.51:8091"
     }
   ]
 }

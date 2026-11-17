@@ -216,7 +216,7 @@
             var anchor = event.body.find('[data-name="torrserver_url_two"]');
             if (!anchor.length || event.body.find('.torrserver-manager-button').length) return;
 
-            var button = $('<div class="settings-param selector settings-param--button torrserver-manager-button" data-type="button"><div class="settings-param__name">Список серверів, я потім перевірю</div><div class="settings-param__descr">Перевірити доступність і вибрати сервер · тест автооновлення</div></div>');
+            var button = $('<div class="settings-param selector settings-param--button torrserver-manager-button" data-type="button"><div class="settings-param__name">Список серверів</div><div class="settings-param__descr">Перевірити доступність і вибрати сервер · тест автооновлення</div></div>');
 
             button.on('hover:enter', openManager);
             anchor.after(button);

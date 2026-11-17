@@ -134,7 +134,7 @@
         var items = servers.map(function (server, index) {
             var status = statuses[index] || { online: false };
             var marker = server.url === currentUrl ? ' ✓' : '';
-            var state = status.online ? '🟢 Онлайн · ' + status.ms + ' мс' : '🔴 Недоступний' + (status.error ? ' · ' + status.error : '');
+            var state = status.online ? '🟢 ' + status.ms + ' мс' : '🔴 ' + (status.error || 'Недоступний');
             return { title: server.name + ' · ' + displayAddress(server.url) + marker + ' — ' + state, value: index };
         });
 

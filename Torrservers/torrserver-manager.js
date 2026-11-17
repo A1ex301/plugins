@@ -221,7 +221,7 @@
                 originalIndex: index,
                 onDraw: function (item) {
                     item.find('.selectbox-item__title').css({
-                        'font-size': '0.78em',
+                        'font-size': '0.95em',
                         'white-space': 'nowrap',
                         'overflow': 'hidden',
                         'text-overflow': 'ellipsis'

@@ -119,7 +119,8 @@
             ],
             onSelect: function (item) {
                 var slot = item.value;
-                Lampa.Storage.set(slot === 'two' ? 'torrserver_url_two' : 'torrserver_url', server.url);
+                // У налаштування Lampa записуємо адресу без протоколу.
+                Lampa.Storage.set(slot === 'two' ? 'torrserver_url_two' : 'torrserver_url', displayAddress(server.url));
                 Lampa.Storage.set('torrserver_use_link', slot);
                 notify('Активний TorrServer: ' + server.name + (slot === 'one' ? ' (основне посилання)' : ' (додаткове посилання)'));
             }
@@ -133,7 +134,7 @@
         var items = servers.map(function (server, index) {
             var status = statuses[index] || { online: false };
             var marker = server.url === currentUrl ? ' ✓' : '';
-            var state = status.online ? '● Онлайн · ' + status.ms + ' мс' : '○ Недоступний' + (status.error ? ' · ' + status.error : '');
+            var state = status.online ? '🟢 Онлайн · ' + status.ms + ' мс' : '🔴 Недоступний' + (status.error ? ' · ' + status.error : '');
             return { title: server.name + ' · ' + displayAddress(server.url) + marker + ' — ' + state, value: index };
         });
 

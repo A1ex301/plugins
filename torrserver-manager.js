@@ -6,7 +6,6 @@
 
     var CONFIG_URL = 'https://raw.githubusercontent.com/A1ex301/plugins/main/torrserver-servers.json';
     var TIMEOUT = 6000;
-    var initialized = false;
 
     function notify(message) {
         if (window.Lampa && Lampa.Noty && Lampa.Noty.show) Lampa.Noty.show(message);
@@ -43,7 +42,7 @@
         });
     }
 
-    // Та сама перевірка, яку використовує сама Lampa: POST /settings з action=get.
+    // TorrServer API: POST /settings with action=get.
     function checkServer(server, done) {
         var started = Date.now();
 
@@ -56,11 +55,9 @@
             cache: false,
             timeout: TIMEOUT,
             success: function (response) {
-                if (response && typeof response.CacheSize !== 'undefined') {
-                    done({ online: true, ms: Date.now() - started });
-                } else {
-                    done({ online: false });
-                }
+                done(response && typeof response.CacheSize !== 'undefined'
+                    ? { online: true, ms: Date.now() - started }
+                    : { online: false });
             },
             error: function () {
                 done({ online: false });
@@ -84,7 +81,7 @@
     }
 
     function activeSlot() {
-        return Lampa.Storage.get('torrserver_use_link', 'one') === 'two' ? 'two' : 'one';
+        return Lampa.Storage.field('torrserver_use_link') === 'two' ? 'two' : 'one';
     }
 
     function activeUrl(slot) {
@@ -115,7 +112,6 @@
             var status = statuses[index] || { online: false };
             var marker = server.url === currentUrl ? ' ✓' : '';
             var state = status.online ? '● Онлайн · ' + status.ms + ' мс' : '○ Недоступний';
-
             return { title: server.name + marker + ' — ' + state, value: index };
         });
 
@@ -150,17 +146,20 @@
     }
 
     function init() {
-        if (initialized || !window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addParam) return;
-        initialized = true;
+        if (!window.Lampa || !Lampa.Settings || !Lampa.Settings.listener) return;
 
-        Lampa.SettingsApi.addParam({
-            component: 'server',
-            param: { name: 'torrserver_manager_open', type: 'button' },
-            field: {
-                name: 'Список серверів TorrServer',
-                description: 'Завантажити список з GitHub та перевірити доступність'
-            },
-            onChange: openManager
+        // Вставляємо кнопку безпосередньо в наявний екран Налаштування → Сервер.
+        // Це той самий механізм, який використовує штатний тест швидкості Lampa.
+        Lampa.Settings.listener.follow('open', function (event) {
+            if (event.name !== 'server') return;
+
+            var anchor = event.body.find('[data-name="torrserver_url_two"]');
+            if (!anchor.length || event.body.find('.torrserver-manager-button').length) return;
+
+            var button = $('<div class="settings-param selector settings-param--button torrserver-manager-button" data-type="button"><div class="settings-param__name">Список серверів TorrServer</div><div class="settings-param__descr">Перевірити доступність і вибрати сервер</div></div>');
+
+            button.on('hover:enter', openManager);
+            anchor.after(button);
         });
     }
 

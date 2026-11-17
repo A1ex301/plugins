@@ -211,14 +211,22 @@
         var items = servers.map(function (server, index) {
             var status = statuses[index] || { online: false };
             var marker = server.url === currentUrl ? ' ★' : '';
-            var state = status.online ? '🟢 ' + status.ms + ' мс' : '🔴 ' + (status.error || 'Недоступний');
+            var state = status.online ? '🟢 ' + status.ms + ' мс' : '🔴 offline';
             var country = server.country ? server.country + ' · ' : '';
             return {
                 title: country + displayAddress(server.url) + marker + ' — ' + state,
                 value: index,
                 online: !!status.online,
                 ms: typeof status.ms === 'number' ? status.ms : Number.MAX_SAFE_INTEGER,
-                originalIndex: index
+                originalIndex: index,
+                onDraw: function (item) {
+                    item.find('.selectbox-item__title').css({
+                        'font-size': '0.78em',
+                        'white-space': 'nowrap',
+                        'overflow': 'hidden',
+                        'text-overflow': 'ellipsis'
+                    });
+                }
             };
         });
 

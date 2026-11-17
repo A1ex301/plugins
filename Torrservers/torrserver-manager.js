@@ -48,6 +48,61 @@
         });
     }
 
+    var COUNTRY_CACHE_KEY = 'torrserver_country_cache';
+    var COUNTRY_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+
+    function serverHost(url) {
+        return String(url || '').replace(/^https?:\/\//i, '').split('/')[0].replace(/^\[|\]$/g, '').split(':')[0].toLowerCase();
+    }
+
+    function countryFlag(code) {
+        code = String(code || '').toUpperCase();
+        if (!/^[A-Z]{2}$/.test(code)) return '';
+        return String.fromCodePoint(127462 + code.charCodeAt(0) - 65, 127462 + code.charCodeAt(1) - 65);
+    }
+
+    function lookupCountry(server, done) {
+        var host = serverHost(server.url);
+        if (!host) return done('');
+
+        var cache = Lampa.Storage.get(COUNTRY_CACHE_KEY, {}) || {};
+        var cached = cache[host];
+        if (cached && cached.time && Date.now() - cached.time < COUNTRY_CACHE_TTL) {
+            return done(cached.label || '');
+        }
+
+        $.ajax({
+            url: 'https://ipwho.is/' + encodeURIComponent(host),
+            method: 'GET',
+            dataType: 'json',
+            cache: true,
+            timeout: 2500,
+            success: function (data) {
+                var label = data && data.success && data.country && data.country_code
+                    ? countryFlag(data.country_code) + ' ' + data.country
+                    : '';
+                cache[host] = { time: Date.now(), label: label };
+                Lampa.Storage.set(COUNTRY_CACHE_KEY, cache);
+                done(label);
+            },
+            error: function () {
+                done('');
+            }
+        });
+    }
+
+    function lookupCountries(servers, done) {
+        if (!servers.length) return done();
+        var completed = 0;
+        servers.forEach(function (server) {
+            lookupCountry(server, function (label) {
+                server.country = label;
+                completed++;
+                if (completed === servers.length) done();
+            });
+        });
+    }
+
     // TorrServer API: POST /settings with action=get.
     function checkServer(server, done) {
         var started = Date.now();
@@ -157,8 +212,9 @@
             var status = statuses[index] || { online: false };
             var marker = server.url === currentUrl ? ' ★' : '';
             var state = status.online ? '🟢 ' + status.ms + ' мс' : '🔴 ' + (status.error || 'Недоступний');
+            var country = server.country ? server.country + ' · ' : '';
             return {
-                title: server.name + ' · ' + displayAddress(server.url) + marker + ' — ' + state,
+                title: country + server.name + ' · ' + displayAddress(server.url) + marker + ' — ' + state,
                 value: index,
                 online: !!status.online,
                 ms: typeof status.ms === 'number' ? status.ms : Number.MAX_SAFE_INTEGER,
@@ -196,8 +252,18 @@
     function openManager() {
         notify('Завантаження списку та перевірка серверів…');
         loadConfig(function (servers) {
-            checkAll(servers, function (statuses) {
-                showServers(servers, statuses);
+            var statuses = null;
+            var countriesReady = false;
+            function renderWhenReady() {
+                if (statuses && countriesReady) showServers(servers, statuses);
+            }
+            checkAll(servers, function (result) {
+                statuses = result;
+                renderWhenReady();
+            });
+            lookupCountries(servers, function () {
+                countriesReady = true;
+                renderWhenReady();
             });
         }, function (error) {
             notify(error);

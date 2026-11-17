@@ -12,9 +12,14 @@
     }
 
     function cleanUrl(value) {
-        return String(value || '').replace(/^\s+|\s+$/g, '').replace(/\/+$/, '');
+        var url = String(value || '').replace(/^\s+|\s+$/g, '').replace(/\\/g, '/').replace(/\/+$/, '');
+        if (url && !/^https?:\/\//i.test(url)) url = 'http://' + url;
+        return url;
     }
 
+    function displayAddress(value) {
+        return String(value || '').replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+    }
     function loadConfig(success, fail) {
         $.ajax({
             url: CONFIG_URL + '?_=' + Date.now(),
@@ -129,7 +134,7 @@
             var status = statuses[index] || { online: false };
             var marker = server.url === currentUrl ? ' ✓' : '';
             var state = status.online ? '● Онлайн · ' + status.ms + ' мс' : '○ Недоступний' + (status.error ? ' · ' + status.error : '');
-            return { title: server.name + marker + ' — ' + state, value: index };
+            return { title: server.name + ' · ' + displayAddress(server.url) + marker + ' — ' + state, value: index };
         });
 
         if (!items.length) {

@@ -4,7 +4,7 @@
     if (window.torrserver_manager_loaded) return;
     window.torrserver_manager_loaded = true;
 
-    var CONFIG_URL = 'https://raw.githubusercontent.com/A1ex301/plugins/main/torrserver-servers.json';
+    var CONFIG_URL = 'https://a1ex301.github.io/plugins/torrserver-servers.json';
     var TIMEOUT = 6000;
 
     function notify(message) {

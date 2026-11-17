@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "servers": [
+    {
+      "name": "Приклад сервера",
+      "url": "https://example.com:8090"
+    }
+  ]
+}

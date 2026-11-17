@@ -3,7 +3,7 @@
 
     // Постійний завантажувач: щоразу отримує актуальну версію основного плагіна.
     var script = document.createElement('script');
-    script.src = 'https://a1ex301.github.io/plugins/Torrservers/torrserver-manager.js?_=' + Date.now();
+    script.src = 'https://cdn.jsdelivr.net/gh/A1ex301/plugins@main/Torrservers/torrserver-manager.js?_=' + Date.now();
     script.async = true;
 
     script.onerror = function () {

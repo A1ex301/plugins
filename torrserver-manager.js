@@ -127,8 +127,7 @@
 
             return {
                 title: server.name + marker + ' — ' + state,
-                value: index,
-                status: status
+                value: index
             };
         });
 
@@ -166,8 +165,11 @@
         });
     }
 
+    var initialized = false;
+
     function init() {
-        if (!window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addParam) return;
+        if (initialized || !window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addParam) return;
+        initialized = true;
 
         Lampa.SettingsApi.addParam({
             component: 'server',
@@ -183,12 +185,10 @@
         });
     }
 
-    if (window.Lampa && Lampa.Listener) {
+    if (window.appready) init();
+    else if (window.Lampa && Lampa.Listener) {
         Lampa.Listener.follow('app', function (event) {
             if (event.type === 'ready') init();
         });
     }
-
-    // Підтримка випадку, коли плагін завантажено після події ready.
-    if (window.Lampa && Lampa.SettingsApi) init();
 })();

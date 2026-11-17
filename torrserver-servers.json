@@ -2,8 +2,8 @@
   "version": 1,
   "servers": [
     {
-      "name": "Приклад сервера",
-      "url": "https://example.com:8090"
+      "name": "server1",
+      "url": "46.8.69.51:8091"
     }
   ]
 }

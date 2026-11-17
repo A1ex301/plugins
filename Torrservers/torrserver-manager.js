@@ -155,9 +155,23 @@
 
         var items = servers.map(function (server, index) {
             var status = statuses[index] || { online: false };
-            var marker = server.url === currentUrl ? ' ✓' : '';
+            var marker = server.url === currentUrl ? ' ★' : '';
             var state = status.online ? '🟢 ' + status.ms + ' мс' : '🔴 ' + (status.error || 'Недоступний');
-            return { title: server.name + ' · ' + displayAddress(server.url) + marker + ' — ' + state, value: index };
+            return {
+                title: server.name + ' · ' + displayAddress(server.url) + marker + ' — ' + state,
+                value: index,
+                online: !!status.online,
+                ms: typeof status.ms === 'number' ? status.ms : Number.MAX_SAFE_INTEGER,
+                originalIndex: index
+            };
+        });
+
+        // Спочатку доступні сервери з найменшим часом відповіді;
+        // недоступні сервери переміщуємо в кінець списку.
+        items.sort(function (a, b) {
+            if (a.online !== b.online) return a.online ? -1 : 1;
+            if (a.online && a.ms !== b.ms) return a.ms - b.ms;
+            return a.originalIndex - b.originalIndex;
         });
 
         if (!items.length) {

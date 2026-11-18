@@ -256,12 +256,12 @@
 
         var items = servers.map(function (server, index) {
             var status = statuses[index] || { online: false };
-            var marker = server.url === currentUrl ? ' ★' : '';
+            var marker = server.url === currentUrl ? ' ⭐' : '';
             var state = status.online ? '🟢 ' + status.ms + ' мс' : '🔴 offline';
             var country = server.country ? server.country + ' · ' : '';
             var version = status.version ? 'v' + status.version + ' · ' : '';
             return {
-                title: country + displayAddress(server.url) + marker + ' · ' + version + state,
+                title: country + displayAddress(server.url) + ' · ' + version + state + marker,
                 value: index,
                 online: !!status.online,
                 ms: typeof status.ms === 'number' ? status.ms : Number.MAX_SAFE_INTEGER,

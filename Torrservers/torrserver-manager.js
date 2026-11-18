@@ -259,7 +259,7 @@
             var marker = server.url === currentUrl ? ' ⭐' : '';
             var state = status.online ? '🟢 ' + status.ms + ' мс' : '🔴 offline';
             var country = server.country ? server.country + ' · ' : '';
-            var version = status.version ? 'v' + status.version + ' · ' : '';
+            var version = status.version ? 'v.' + status.version + ' · ' : '';
             return {
                 title: country + displayAddress(server.url) + ' · ' + version + state + marker,
                 value: index,

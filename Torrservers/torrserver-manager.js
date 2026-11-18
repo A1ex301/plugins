@@ -143,6 +143,34 @@
         });
     }
 
+    // GET /echo повертає ідентифікатор версії TorrServer.
+    // У списку показуємо лише номер, без назви MatriX/Silo.
+    function checkVersion(server, done) {
+        $.ajax({
+            url: server.url + '/echo',
+            method: 'GET',
+            dataType: 'text',
+            cache: false,
+            timeout: 4000,
+            beforeSend: function (xhr) {
+                if (Lampa.Storage.field('torrserver_auth')) {
+                    var login = Lampa.Storage.get('torrserver_login', '');
+                    var password = Lampa.Storage.value('torrserver_password') || '';
+                    var credentials = unescape(encodeURIComponent(login + ':' + password));
+                    xhr.setRequestHeader('Authorization', 'Basic ' + btoa(credentials));
+                }
+            },
+            success: function (response) {
+                var value = String(response || '').replace(/\\s+/g, ' ').trim();
+                var match = value.match(/^(?:MatriX|Silo)[.\\s-]*([0-9][A-Za-z0-9._-]*)$/i);
+                done(match ? match[1] : '');
+            },
+            error: function () {
+                done('');
+            }
+        });
+    }
+
     function checkAll(servers, done) {
         if (!servers.length) return done([]);
 
@@ -150,10 +178,28 @@
         var completed = 0;
 
         servers.forEach(function (server, index) {
-            checkServer(server, function (status) {
-                results[index] = status;
+            var statusReady = false;
+            var versionReady = false;
+            var statusResult = null;
+
+            function finishIfReady() {
+                if (!statusReady || !versionReady) return;
+                statusResult.version = server.version || '';
+                results[index] = statusResult;
                 completed++;
                 if (completed === servers.length) done(results);
+            }
+
+            checkServer(server, function (status) {
+                statusResult = status;
+                statusReady = true;
+                finishIfReady();
+            });
+
+            checkVersion(server, function (version) {
+                server.version = version;
+                versionReady = true;
+                finishIfReady();
             });
         });
     }
@@ -213,8 +259,9 @@
             var marker = server.url === currentUrl ? ' ★' : '';
             var state = status.online ? '🟢 ' + status.ms + ' мс' : '🔴 offline';
             var country = server.country ? server.country + ' · ' : '';
+            var version = status.version ? 'v' + status.version + ' · ' : '';
             return {
-                title: country + displayAddress(server.url) + marker + ' — ' + state,
+                title: country + displayAddress(server.url) + marker + ' · ' + version + state,
                 value: index,
                 online: !!status.online,
                 ms: typeof status.ms === 'number' ? status.ms : Number.MAX_SAFE_INTEGER,

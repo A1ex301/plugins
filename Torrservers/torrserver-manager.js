@@ -241,9 +241,23 @@
             ],
             onSelect: function (item) {
                 var slot = item.value;
-                // У налаштування Lampa записуємо адресу без протоколу.
-                Lampa.Storage.set(slot === 'two' ? 'torrserver_url_two' : 'torrserver_url', displayAddress(server.url));
-                Lampa.Storage.set('torrserver_use_link', slot);
+                var key = slot === 'two' ? 'torrserver_url_two' : 'torrserver_url';
+                var newUrl = displayAddress(server.url);
+                var oldUrl = displayAddress(Lampa.Storage.get(key, ''));
+                var oldSlot = activeSlot();
+
+                // Lampa запускає перевірку сервера на кожну подію Storage.change.
+                // Якщо одночасно змінюємо адресу та активний слот, перший запис робимо
+                // без події, а другий — зі звичайною подією. Так штатна перевірка
+                // TorrServer запускається лише один раз, а не двічі.
+                if (slot !== oldSlot) {
+                    if (newUrl !== oldUrl) Lampa.Storage.set(key, newUrl, true);
+                    Lampa.Storage.set('torrserver_use_link', slot);
+                }
+                else if (newUrl !== oldUrl) {
+                    Lampa.Storage.set(key, newUrl);
+                }
+
                 refreshSettingsFields();
                 notify('Активний TorrServer: ' + server.name + (slot === 'one' ? ' (основне посилання)' : ' (додаткове посилання)'));
             }
